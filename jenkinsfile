@@ -1,0 +1,45 @@
+pipeline {
+    agent {label 'Node-1'}
+    triggers { pollSCM('* * * * *') }
+      stages {
+        stage (vcs) {
+           steps {
+                git branch:'main',url:'https://github.com/BNYMellon/spring-kata.git'
+           } 
+        }
+        stage (build) {
+            steps {
+               withSonarQubeEnv('sonar') {
+                 sh 'mvn clean package sonar:sonar'
+              }
+            }
+        }
+        stage ('Artifactory configuration') {  
+            steps {
+                rtMavenDeployer (
+                    id: "mvn",
+                    serverId: "jfrog12",
+                    releaseRepo: "qt-libs-release-local",
+                    snapshotRepo: "qt-libs-snapshot-local"
+                )
+            }
+        }
+         stage ('Exec Maven') {
+            steps {
+                rtMavenRun (
+                    tool: 'MAVEN',
+                    pom: 'pom.xml',
+                    goals: 'clean install',
+                    deployerId: "mvn"
+                )
+            }
+        }
+        stage ('Publish build info') {
+            steps {
+                rtPublishBuildInfo (
+                    serverId: "jfrog12"
+                )
+            }
+        }
+      }   
+}
